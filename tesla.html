@@ -1204,6 +1204,22 @@
   body.density-cockpit #shortcuts-tiles .app-tile { width: 100px; height: 88px; }
   body.density-cockpit #shortcuts-tiles .app-tile-icon { width: 40px; height: 40px; }
 
+  /* Shortcuts relocated into the dock — fill the former marquee dead space, scroll horizontally */
+  #dock-shortcuts { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+  #dock-shortcuts #shortcuts-tiles {
+    flex: 1; min-width: 0;
+    display: flex; flex-wrap: nowrap; gap: 12px;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 12px 2px; scroll-behavior: smooth;
+  }
+  #dock-shortcuts #shortcuts-tiles::-webkit-scrollbar { height: 5px; }
+  #dock-shortcuts #shortcuts-tiles::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  #dock-shortcuts #shortcuts-tiles .app-tile { width: 82px; height: 72px; flex: 0 0 auto; gap: 6px; border-radius: 10px; }
+  #dock-shortcuts #shortcuts-tiles .app-tile-icon { width: 36px; height: 36px; }
+  #dock-shortcuts #shortcuts-tiles .app-tile-name { font-size: 11px; }
+  #dock-shortcuts #shortcuts-tiles .add-tile .plus-icon { width: 36px; height: 36px; font-size: 28px; }
+  #dock-shortcuts #edit-shortcuts-btn { flex-shrink: 0; }
+
   /* ── NEWS PAGE (multi-source card grid) ───────────── */
   .news-page { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 20px 30px; gap: 16px; }
   body.density-cockpit .news-page { padding: 14px 22px; gap: 12px; }
@@ -1373,16 +1389,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Shortcut rail — all shortcuts, horizontal, above the player -->
-      <div id="home-shortcuts">
-        <div class="rail-head">
-          <span class="rail-label">Shortcuts</span>
-          <div class="rail-line"></div>
-          <span class="cat-action" id="edit-shortcuts-btn" onclick="toggleShortcutEdit()">Edit</span>
-        </div>
-        <div id="shortcuts-tiles"></div>
-      </div>
     </div>
 
     <!-- NEWS -->
@@ -1488,8 +1494,14 @@
       <div id="dock-show">The Drive with Mick &amp; Mike</div>
     </div>
 
-    <!-- RADIO MODE: marquee -->
-    <div id="dock-marquee" class="empty">
+    <!-- Shortcuts strip — fills the dock, scrolls horizontally -->
+    <div id="dock-shortcuts">
+      <div id="shortcuts-tiles"></div>
+      <span class="cat-action" id="edit-shortcuts-btn" onclick="toggleShortcutEdit()">Edit</span>
+    </div>
+
+    <!-- RADIO MODE: marquee (retired — now-playing text hooks kept) -->
+    <div id="dock-marquee" class="empty" style="display:none;">
       <span id="dock-marquee-text">Press play to start the stream</span>
       <span class="scrub-flow"></span>
     </div>
@@ -1751,9 +1763,11 @@ function setDockMode(mode) {
   const artImg   = document.getElementById('dock-art-img');
   const title    = document.getElementById('dock-title');
   const show     = document.getElementById('dock-show');
+  const shortcuts = document.getElementById('dock-shortcuts');
   if (mode === 'podcast' && currentEpisode) {
     dock.classList.add('podcast-mode');
     marquee.style.display = 'none';
+    if (shortcuts) shortcuts.style.display = 'none';
     seek.style.display = 'flex';
     ret.style.display = 'flex';
     station.textContent = 'Podcast · ' + currentEpisode.feedName;
@@ -1767,7 +1781,8 @@ function setDockMode(mode) {
     artBox.style.backgroundPosition = 'center';
   } else {
     dock.classList.remove('podcast-mode');
-    marquee.style.display = '';
+    marquee.style.display = 'none';
+    if (shortcuts) shortcuts.style.display = 'flex';
     seek.style.display = 'none';
     ret.style.display = 'none';
     station.textContent = 'Live · ESPN 920 AM';
