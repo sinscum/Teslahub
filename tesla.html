@@ -1171,11 +1171,14 @@
   .hero-cd-lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
 
   /* home lower grid */
-  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-  .home-card { background: var(--bg-tile); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; flex-direction: column; }
+  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+  /* Both boxes share one fixed height so they always match; each fills/scrolls internally. */
+  .home-card { background: var(--bg-tile); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; flex-direction: column; height: 340px; }
+  body.density-cockpit .home-card { height: 300px; }
   .home-card .card-title { margin-bottom: 12px; }
-  .home-card .card-scroll { max-height: 210px; }
-  body.density-cockpit .home-card .card-scroll { max-height: 168px; }
+  .home-card .card-scroll { flex: 1; min-height: 0; }
+  /* AFC West: distribute its four rows to fill the card instead of leaving dead space. */
+  #home-afc-feed { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; }
 
   /* Home layout: force single-column stacking (manual toggle or auto breakpoint, driven by JS) */
   body.home-stacked .home-hero-row { grid-template-columns: 1fr; }
@@ -1946,10 +1949,6 @@ function doSearch(e) {
 // ── MY SHORTCUTS ───────────────────────────────────────
 const SHORTCUTS_KEY = 'teslahome_shortcuts';
 const DEFAULT_SHORTCUTS = [
-  { name: 'HBO Max',        url: 'https://www.max.com',           icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/max.png' },
-  { name: 'Apple TV',       url: 'https://tv.apple.com',          icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/apple-tv-plus-light.png' },
-  { name: 'ABRP',           url: 'https://abetterrouteplanner.com', icon: 'https://play-lh.googleusercontent.com/kRliolr4iRN54eiZjWHa_syBXyKNEBljXsxGs2l8xJ9G39Y-G4J2o8aH8SoVL7QWoOM=w240-h480-rw' },
-  { name: 'Ventusky',       url: 'https://www.ventusky.com',      icon: 'https://play-lh.googleusercontent.com/utgUoNCe0j3qP3IRL-QLBvKywi12eN5cuVDW4pCecw5TGVsEaxPzw112Dwz-5plKeQ' },
   { name: 'Audiobookshelf', url: 'https://audio.deadzombies.org/', icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/audiobookshelf.png' },
   { name: 'Plex',           url: 'https://app.plex.tv',         icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/plex.png' },
   { name: 'r/Raiders',      url: 'https://www.reddit.com/r/raiders/', icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/reddit.png' },
