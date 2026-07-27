@@ -1236,7 +1236,9 @@
     border-radius: var(--radius); padding: 20px 26px; display: flex; align-items: center;
     justify-content: space-between; gap: 24px; flex-wrap: wrap;
   }
-  .team-hero-left { display: flex; align-items: baseline; gap: 16px; }
+  .team-hero-left { display: flex; align-items: center; gap: 16px; }
+  .team-hero-logo { width: 60px; height: 60px; object-fit: contain; flex-shrink: 0; }
+  .team-hero-rec-row { display: flex; align-items: center; gap: 12px; }
   .team-hero-rec { font-size: 52px; font-weight: 700; color: var(--gold); line-height: 1; }
   .team-hero-sub { font-size: 14px; color: var(--text-secondary); }
   .team-hero-mid { display: flex; align-items: center; gap: 16px; }
@@ -1396,8 +1398,14 @@
     <div id="team-panel" class="tab-panel">
       <div class="team-hero">
         <div class="team-hero-left">
-          <div class="team-hero-rec" id="team-rec">—</div>
-          <div class="team-hero-sub" id="team-rec-sub">Las Vegas Raiders · AFC West</div>
+          <img class="team-hero-logo" id="team-rec-logo" src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/lv.png" alt="LV">
+          <div>
+            <div class="team-hero-rec-row">
+              <div class="team-hero-rec" id="team-rec">—</div>
+              <span class="hero-tag" id="team-rec-tag" style="display:none;">Preseason</span>
+            </div>
+            <div class="team-hero-sub" id="team-rec-sub">Las Vegas Raiders · AFC West</div>
+          </div>
         </div>
         <div class="team-hero-mid" id="team-matchup"><span class="team-hero-sub">Loading next game…</span></div>
         <div class="team-hero-when" id="team-when"></div>
@@ -2583,14 +2591,30 @@ function startHeroCountdown(iso) {
 }
 async function loadTeamHero() {
   const s = await teamSummary();
+  // Record block: logo + swap record / "Preseason" tag by phase.
   const recEl = document.getElementById('team-rec');
-  if (recEl) recEl.textContent = s.record;
+  const tagEl = document.getElementById('team-rec-tag');
+  const subEl = document.getElementById('team-rec-sub');
+  const logoEl = document.getElementById('team-rec-logo');
+  if (logoEl) logoEl.src = lvLogo();
+  if (s.phase === 'preseason') {
+    if (recEl) recEl.style.display = 'none';
+    if (tagEl) { tagEl.style.display = ''; tagEl.textContent = 'Preseason'; }
+    if (subEl) subEl.textContent = 'Las Vegas Raiders \u00b7 Preseason';
+  } else {
+    if (recEl) { recEl.style.display = ''; recEl.textContent = s.record; }
+    if (tagEl) tagEl.style.display = 'none';
+    if (subEl) subEl.textContent = 'Las Vegas Raiders \u00b7 AFC West';
+  }
   const mEl = document.getElementById('team-matchup');
   const wEl = document.getElementById('team-when');
   if (s.next && s.opp) {
     const oppAbbr = s.opp.team?.abbreviation || 'OPP';
-    if (mEl) mEl.innerHTML = `<img src="${lvLogo()}" alt="LV"><span class="vs">${s.home?'vs':'@'}</span><img src="${oppLogo(oppAbbr)}" alt="${oppAbbr}"><span class="team-hero-sub">${s.opp.team?.displayName||oppAbbr}</span>`;
-    if (wEl) wEl.innerHTML = `<div class="lbl">Next Game</div><div class="val">${s.when}</div><div class="team-hero-sub">${s.venue||''}</div>`;
+    if (mEl) mEl.innerHTML =
+      `<div class="hero-team"><img src="${lvLogo()}" alt="LV"><span class="hero-team-abbr lv">LV</span></div>` +
+      `<span class="vs">${s.home?'vs':'@'}</span>` +
+      `<div class="hero-team"><img src="${oppLogo(oppAbbr)}" alt="${oppAbbr}"><span class="hero-team-abbr">${oppAbbr}</span></div>`;
+    if (wEl) wEl.innerHTML = `<div class="lbl">Next Game</div><div class="val">${s.when}</div><div class="team-hero-sub">${s.opp.team?.displayName||oppAbbr}${s.venue?' \u00b7 '+s.venue:''}</div>`;
   } else {
     if (mEl) mEl.innerHTML = '<span class="team-hero-sub">No game scheduled \u00b7 off-season</span>';
     if (wEl) wEl.innerHTML = '';
