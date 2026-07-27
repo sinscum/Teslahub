@@ -1145,12 +1145,27 @@
   body.density-cockpit .hero-big { font-size: 34px; }
   body.density-cockpit .hero-card { min-height: 104px; padding: 14px 18px; }
 
-  /* next-game hero */
-  .hero-matchup { display: flex; align-items: center; gap: 14px; justify-content: space-between; width: 100%; }
+  /* record card — team logo + record / preseason tag */
+  .hero-rec-row { display: flex; align-items: center; gap: 14px; }
+  .hero-team-logo { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }
+  .hero-rec-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .hero-tag {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-dim);
+    border-radius: 999px; padding: 5px 13px; white-space: nowrap;
+  }
+  body.density-cockpit .hero-team-logo { width: 38px; height: 38px; }
+
+  /* next-game hero — centered matchup + countdown, capped so it reads well at any card width */
+  .hero-matchup { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; max-width: 340px; margin: 0 auto; }
   .hero-matchup img { width: 40px; height: 40px; object-fit: contain; }
   .hero-matchup .vs { font-size: 15px; color: var(--text-dim); font-weight: 600; }
-  .hero-cd { display: flex; gap: 8px; margin-top: 2px; width: 100%; justify-content: space-between; }
+  .hero-team { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .hero-team-abbr { font-size: 12px; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.06em; }
+  .hero-team-abbr.lv { color: var(--gold); }
+  .hero-cd { display: flex; gap: 8px; margin: 2px auto 0; width: 100%; max-width: 340px; justify-content: space-between; }
   .hero-cd-unit { flex: 1; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; text-align: center; min-width: 46px; }
+  #home-next-meta { text-align: center; }
   .hero-cd-num { font-size: 20px; font-weight: 700; color: var(--gold); line-height: 1; font-variant-numeric: tabular-nums; }
   .hero-cd-lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
 
@@ -1316,7 +1331,13 @@
         <div class="home-hero-row">
           <div class="hero-card tap" onclick="switchTab('team')">
             <div class="hero-eyebrow">Raiders</div>
-            <div class="hero-big gold" id="home-rec">—</div>
+            <div class="hero-rec-row">
+              <img class="hero-team-logo" id="home-rec-logo" src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/lv.png" alt="LV">
+              <div class="hero-rec-main">
+                <div class="hero-big gold" id="home-rec">—</div>
+                <span class="hero-tag" id="home-rec-tag" style="display:none;">Preseason</span>
+              </div>
+            </div>
             <div class="hero-sub" id="home-rec-sub">Las Vegas · AFC West</div>
           </div>
           <div class="hero-card tap" onclick="switchTab('team')">
@@ -2332,14 +2353,16 @@ const SCHED_2024 = [
   {wk:'18',opp:'vs LAC', date:'Jan 5',  r:'W', s:'25–22'},
 ];
 
-// Fetch preseason (seasontype=1) + regular season (seasontype=2) and return one merged events array.
+// Fetch preseason (seasontype=1) + regular season (seasontype=2) and return one merged
+// events array. Each event is tagged with _seasonType (1 = preseason, 2 = regular).
 async function fetchRaidersEvents(season) {
   const base = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/13/schedule?season=${season}`;
   const [pre, reg] = await Promise.all([
     fetch(`${base}&seasontype=1`).then(r=>r.json()).catch(()=>({})),
     fetch(`${base}&seasontype=2`).then(r=>r.json()).catch(()=>({})),
   ]);
-  return [...(pre.events||[]), ...(reg.events||[])];
+  const tag = (arr, st) => (arr||[]).map(e => ({ ...e, _seasonType: st }));
+  return [...tag(pre.events, 1), ...tag(reg.events, 2)];
 }
 
 function loadRaidersSchedule(target = 'schedule-feed', titleId = 'schedule-title') {
@@ -2487,7 +2510,7 @@ async function fetchTeamSummary() {
     const rec = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/13/record').then(r=>r.json());
     record = rec.team?.record?.items?.find(i=>i.type==='total')?.summary || '0-0';
   } catch(e) {}
-  let next = null, opp = null, home = false, when = '', venue = '', kickISO = null;
+  let next = null, opp = null, home = false, when = '', venue = '', kickISO = null, phase = 'offseason';
   try {
     const rawEvents = await fetchRaidersEvents(season);
     const now = Date.now();
@@ -2501,22 +2524,38 @@ async function fetchTeamSummary() {
       kickISO = next.date;
       when = next._d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' \u00b7 ' + next._d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
       venue = comp.venue?.fullName || '';
+      phase = next._seasonType === 1 ? 'preseason' : 'regular';
     }
   } catch(e) {}
-  return { record, next, opp, home, when, venue, kickISO };
+  return { record, next, opp, home, when, venue, kickISO, phase };
 }
 function lvLogo() { return 'https://a.espncdn.com/i/teamlogos/nfl/500-dark/lv.png'; }
 function oppLogo(abbr) { return `https://a.espncdn.com/i/teamlogos/nfl/500-dark/${(abbr||'').toLowerCase()}.png`; }
 
 async function loadHomeHero() {
   const s = await teamSummary();
+  // Record card: swap between the win-loss record and a "Preseason" tag by phase.
   const recEl = document.getElementById('home-rec');
-  if (recEl) recEl.textContent = s.record;
+  const tagEl = document.getElementById('home-rec-tag');
+  const subEl = document.getElementById('home-rec-sub');
+  if (s.phase === 'preseason') {
+    if (recEl) recEl.style.display = 'none';
+    if (tagEl) { tagEl.style.display = ''; tagEl.textContent = 'Preseason'; }
+    if (subEl) subEl.textContent = 'Las Vegas \u00b7 Preseason';
+  } else {
+    if (recEl) { recEl.style.display = ''; recEl.textContent = s.record; }
+    if (tagEl) tagEl.style.display = 'none';
+    if (subEl) subEl.textContent = 'Las Vegas \u00b7 AFC West';
+  }
+  // Next Game card: dynamic logos + abbreviations for both teams.
   const mEl = document.getElementById('home-next-matchup');
   const metaEl = document.getElementById('home-next-meta');
   if (s.next && s.opp) {
     const oppAbbr = s.opp.team?.abbreviation || 'OPP';
-    if (mEl) mEl.innerHTML = `<img src="${lvLogo()}" alt="LV"><span class="vs">${s.home?'vs':'@'}</span><img src="${oppLogo(oppAbbr)}" alt="${oppAbbr}">`;
+    if (mEl) mEl.innerHTML =
+      `<div class="hero-team"><img src="${lvLogo()}" alt="LV"><span class="hero-team-abbr lv">LV</span></div>` +
+      `<span class="vs">${s.home?'vs':'@'}</span>` +
+      `<div class="hero-team"><img src="${oppLogo(oppAbbr)}" alt="${oppAbbr}"><span class="hero-team-abbr">${oppAbbr}</span></div>`;
     if (metaEl) metaEl.innerHTML = `<b>${s.opp.team?.displayName||oppAbbr}</b> \u00b7 ${s.when}`;
     startHeroCountdown(s.kickISO);
   } else {
