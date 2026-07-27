@@ -1157,6 +1157,15 @@
   }
   body.density-cockpit .hero-team-logo { width: 38px; height: 38px; }
 
+  /* weather hero card */
+  .hero-wx-row { display: flex; align-items: center; gap: 14px; }
+  .hero-wx-icon { font-size: 40px; line-height: 1; }
+  #home-wx-hilo { color: var(--text-dim); font-weight: 400; margin-left: 4px; }
+
+  /* clock hero card */
+  .hero-clock-row { display: flex; align-items: baseline; gap: 8px; }
+  .hero-clock-mer { font-size: 18px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.04em; }
+
   /* next-game hero — centered matchup + countdown, capped so it reads well at any card width */
   .hero-matchup { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; max-width: 340px; margin: 0 auto; }
   .hero-matchup img { width: 40px; height: 40px; object-fit: contain; }
@@ -1354,16 +1363,13 @@
     <div id="home-panel" class="tab-panel active">
       <div id="home-scroll">
         <div class="home-hero-row">
-          <div class="hero-card tap" onclick="switchTab('team')">
-            <div class="hero-eyebrow">Raiders</div>
-            <div class="hero-rec-row">
-              <img class="hero-team-logo" id="home-rec-logo" src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/lv.png" alt="LV">
-              <div class="hero-rec-main">
-                <div class="hero-big gold" id="home-rec">—</div>
-                <span class="hero-tag" id="home-rec-tag" style="display:none;">Preseason</span>
-              </div>
+          <div class="hero-card">
+            <div class="hero-eyebrow">Weather</div>
+            <div class="hero-wx-row">
+              <span class="hero-wx-icon" id="home-wx-icon">🌡️</span>
+              <span class="hero-big" id="home-wx-temp">--°</span>
             </div>
-            <div class="hero-sub" id="home-rec-sub">Las Vegas · AFC West</div>
+            <div class="hero-sub"><b id="home-wx-desc">Locating…</b> <span id="home-wx-hilo"></span></div>
           </div>
           <div class="hero-card tap" onclick="switchTab('team')">
             <div class="hero-eyebrow" id="home-next-eyebrow">Next Game</div>
@@ -1375,10 +1381,13 @@
             </div>
             <div class="hero-sub" id="home-next-meta"></div>
           </div>
-          <div class="hero-card tap" onclick="dockToggle()">
-            <div class="hero-eyebrow">Radio</div>
-            <div class="hero-big">920 AM</div>
-            <div class="hero-sub"><b>Raider Nation Radio</b><br>Tap to play the live stream</div>
+          <div class="hero-card">
+            <div class="hero-eyebrow">Local Time</div>
+            <div class="hero-clock-row">
+              <span class="hero-big" id="home-clock-time">--:--</span>
+              <span class="hero-clock-mer" id="home-clock-mer"></span>
+            </div>
+            <div class="hero-sub" id="home-clock-date">—</div>
           </div>
         </div>
         <div class="home-grid">
@@ -2081,13 +2090,23 @@ document.addEventListener('input', e => {
 
 // ── WEATHER ────────────────────────────────────────────
 function loadWeather() {
-  const set = (t,d) => {
-    document.getElementById('weather-temp').textContent = t==='--'?'--°':`${Math.round(t)}°`;
-    document.getElementById('weather-desc').textContent = d;
+  const set = (t,d,code,hi,lo) => {
+    const tempTxt = t==='--' ? '--°' : `${Math.round(t)}°`;
+    const put = (id,val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    put('weather-temp', tempTxt);
+    put('weather-desc', d);
+    // Home weather card
+    put('home-wx-temp', tempTxt);
+    put('home-wx-desc', d);
+    put('home-wx-icon', wxEmoji(code));
+    put('home-wx-hilo', (hi!=null && lo!=null) ? `H ${Math.round(hi)}°  L ${Math.round(lo)}°` : '');
   };
   const fetchW = (lat,lon) =>
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`)
-      .then(r=>r.json()).then(d=>set(d.current_weather.temperature, wxDesc(d.current_weather.weathercode)));
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=auto`)
+      .then(r=>r.json()).then(d=>{
+        const cw = d.current_weather || {};
+        set(cw.temperature, wxDesc(cw.weathercode), cw.weathercode, d.daily?.temperature_2m_max?.[0], d.daily?.temperature_2m_min?.[0]);
+      });
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       p => fetchW(p.coords.latitude,p.coords.longitude).catch(()=>set('--','Unavailable')),
@@ -2098,6 +2117,31 @@ function loadWeather() {
 function wxDesc(c) {
   return({0:'Clear',1:'Mostly Clear',2:'Partly Cloudy',3:'Overcast',45:'Foggy',48:'Icy Fog',
     51:'Lt Drizzle',53:'Drizzle',61:'Lt Rain',63:'Rain',71:'Lt Snow',73:'Snow',80:'Showers',95:'Thunderstorm'}[c]||'Weather');
+}
+function wxEmoji(c) {
+  if (c===0) return '☀️';
+  if (c===1||c===2) return '⛅';
+  if (c===3) return '☁️';
+  if (c===45||c===48) return '🌫️';
+  if (c>=51 && c<=67) return '🌧️';
+  if (c>=71 && c<=77) return '❄️';
+  if (c>=80 && c<=82) return '🌦️';
+  if (c>=95) return '⛈️';
+  return '🌡️';
+}
+
+// ── LOCAL CLOCK CARD ───────────────────────────────────
+function startClock() {
+  const tick = () => {
+    const now = new Date();
+    const parts = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }).split(' ');
+    const t = document.getElementById('home-clock-time'); if (t) t.textContent = parts[0];
+    const m = document.getElementById('home-clock-mer');  if (m) m.textContent = parts[1] || '';
+    const d = document.getElementById('home-clock-date');
+    if (d) d.textContent = now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  };
+  tick();
+  setInterval(tick, 10000);
 }
 
 // ── TICKER ─────────────────────────────────────────────
@@ -2568,19 +2612,6 @@ function oppLogo(abbr) { return `https://a.espncdn.com/i/teamlogos/nfl/500-dark/
 
 async function loadHomeHero() {
   const s = await teamSummary();
-  // Record card: swap between the win-loss record and a "Preseason" tag by phase.
-  const recEl = document.getElementById('home-rec');
-  const tagEl = document.getElementById('home-rec-tag');
-  const subEl = document.getElementById('home-rec-sub');
-  if (s.phase === 'preseason') {
-    if (recEl) recEl.style.display = 'none';
-    if (tagEl) { tagEl.style.display = ''; tagEl.textContent = 'Preseason'; }
-    if (subEl) subEl.textContent = 'Las Vegas \u00b7 Preseason';
-  } else {
-    if (recEl) { recEl.style.display = ''; recEl.textContent = s.record; }
-    if (tagEl) tagEl.style.display = 'none';
-    if (subEl) subEl.textContent = 'Las Vegas \u00b7 AFC West';
-  }
   // Next Game card: dynamic logos + abbreviations for both teams.
   const mEl = document.getElementById('home-next-matchup');
   const metaEl = document.getElementById('home-next-meta');
@@ -3812,6 +3843,7 @@ function stripHtml(s) {
 updateSearchLabel();
 renderShortcuts();
 loadHomeDashboard();
+startClock();
 loadWeather();
 loadTicker();
 setInterval(loadTicker, 600000); // refresh every 10 min
