@@ -28,6 +28,8 @@
     --gd-scale: 1;
     --gd-hero-scale: 1;
     --gd-right-scale: 1;
+    --home-grid-grow: 1;
+    --home-spacer-grow: 0;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1179,13 +1181,19 @@
   .hero-cd-num { font-size: 20px; font-weight: 700; color: var(--gold); line-height: 1; font-variant-numeric: tabular-nums; }
   .hero-cd-lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
 
-  /* home lower grid */
-  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
-  /* Both boxes share one fixed height so they always match; each fills/scrolls internally. */
-  .home-card { background: var(--bg-tile); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; flex-direction: column; height: 340px; }
-  body.density-cockpit .home-card { height: 300px; }
+  /* home lower grid — grows to fill leftover screen height (see --home-grid-grow / spacer) */
+  .home-grid {
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch;
+    flex-grow: var(--home-grid-grow, 1); flex-shrink: 0; flex-basis: 340px; min-height: 0;
+  }
+  body.density-cockpit .home-grid { flex-basis: 300px; }
+  /* min-height is the floor — boxes never shrink below this, but stretch to fill the row. */
+  .home-card { background: var(--bg-tile); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; flex-direction: column; min-height: 340px; }
+  body.density-cockpit .home-card { min-height: 300px; }
   .home-card .card-title { margin-bottom: 12px; }
   .home-card .card-scroll { flex: 1; min-height: 0; }
+  /* Flexible tail that absorbs the space the grid doesn't take (fill percentage). */
+  #home-fill-spacer { flex-grow: var(--home-spacer-grow, 0); flex-shrink: 0; min-height: 0; }
   /* AFC West: distribute its four rows to fill the card instead of leaving dead space. */
   #home-afc-feed { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; }
 
@@ -1400,6 +1408,7 @@
             <div class="card-scroll" id="home-sched-feed"><div class="schedule-row"><span class="schedule-opp">Loading…</span></div></div>
           </div>
         </div>
+        <div id="home-fill-spacer"></div>
       </div>
     </div>
 
@@ -1593,6 +1602,18 @@
           oninput="setHomeStackBp(this.value)">
         <div style="display:flex;justify-content:space-between;width:100%;font-size:11px;color:var(--text-dim);">
           <span>600</span><span>1000</span><span>1400</span>
+        </div>
+      </div>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+          <span class="settings-row-label">Fill screen height</span>
+          <span id="home-fill-val" style="font-size:14px;color:var(--gold);font-weight:500;min-width:48px;text-align:right;">100%</span>
+        </div>
+        <input type="range" id="home-fill-slider" min="0" max="100" step="5" value="100"
+          style="width:100%;accent-color:var(--gold);"
+          oninput="setHomeFill(this.value)">
+        <div style="display:flex;justify-content:space-between;width:100%;font-size:11px;color:var(--text-dim);">
+          <span>Compact</span><span>Fill screen</span>
         </div>
       </div>
     </div>
@@ -3391,6 +3412,19 @@ function setHomeLayout(mode) { try { localStorage.setItem(HOME_LAYOUT_KEY, mode)
 function setHomeStackBp(px)  { try { localStorage.setItem(HOME_STACK_BP_KEY, parseInt(px)); } catch(e) {} applyHomeLayout(); }
 window.addEventListener('resize', applyHomeLayout);
 
+// How much of the leftover vertical space the bottom boxes absorb.
+// 0% = keep their minimum size (dead space below); 100% = grow to fill the screen.
+const HOME_FILL_KEY = 'teslahome_home_fill';
+function getHomeFill() { try { const v = parseInt(localStorage.getItem(HOME_FILL_KEY)); return isNaN(v) ? 100 : v; } catch(e) { return 100; } }
+function applyHomeFill(pct) {
+  pct = Math.max(0, Math.min(100, parseInt(pct)));
+  document.documentElement.style.setProperty('--home-grid-grow', pct / 100);
+  document.documentElement.style.setProperty('--home-spacer-grow', (100 - pct) / 100);
+  const val = document.getElementById('home-fill-val'); if (val) val.textContent = pct + '%';
+  const sl  = document.getElementById('home-fill-slider'); if (sl && parseInt(sl.value) !== pct) sl.value = pct;
+}
+function setHomeFill(pct) { try { localStorage.setItem(HOME_FILL_KEY, parseInt(pct)); } catch(e) {} applyHomeFill(pct); }
+
 // ── SETTINGS ───────────────────────────────────────────
 const SETTINGS_KEY = 'teslahome_settings';
 
@@ -3424,8 +3458,9 @@ function openSettings() {
   } catch(e) {}
   // geo toggle controls manual city row
   document.getElementById('manual-city-row').style.display = s.geo ? 'none' : 'flex';
-  // sync home-layout control
+  // sync home-layout + fill controls
   applyHomeLayout();
+  applyHomeFill(getHomeFill());
 }
 
 function closeSettings() {
@@ -3852,6 +3887,7 @@ setInterval(checkGameDay, 300000);
 applySettings();
 loadGdScale();
 applyHomeLayout();
+applyHomeFill(getHomeFill());
 setInterval(applySettings, 3600000);
 </script>
 </body>
