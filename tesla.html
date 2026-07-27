@@ -1146,20 +1146,24 @@
   body.density-cockpit .hero-card { min-height: 104px; padding: 14px 18px; }
 
   /* next-game hero */
-  .hero-matchup { display: flex; align-items: center; gap: 14px; }
+  .hero-matchup { display: flex; align-items: center; gap: 14px; justify-content: space-between; width: 100%; }
   .hero-matchup img { width: 40px; height: 40px; object-fit: contain; }
   .hero-matchup .vs { font-size: 15px; color: var(--text-dim); font-weight: 600; }
-  .hero-cd { display: flex; gap: 8px; margin-top: 2px; }
-  .hero-cd-unit { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; text-align: center; min-width: 46px; }
+  .hero-cd { display: flex; gap: 8px; margin-top: 2px; width: 100%; justify-content: space-between; }
+  .hero-cd-unit { flex: 1; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; text-align: center; min-width: 46px; }
   .hero-cd-num { font-size: 20px; font-weight: 700; color: var(--gold); line-height: 1; font-variant-numeric: tabular-nums; }
   .hero-cd-lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
 
   /* home lower grid */
-  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
   .home-card { background: var(--bg-tile); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; flex-direction: column; }
   .home-card .card-title { margin-bottom: 12px; }
   .home-card .card-scroll { max-height: 210px; }
   body.density-cockpit .home-card .card-scroll { max-height: 168px; }
+
+  /* Home layout: force single-column stacking (manual toggle or auto breakpoint, driven by JS) */
+  body.home-stacked .home-hero-row { grid-template-columns: 1fr; }
+  body.home-stacked .home-grid     { grid-template-columns: 1fr; }
 
   /* ── HOME SHORTCUT RAIL (bottom, horizontal) ──────── */
   #home-shortcuts { flex-shrink: 0; border-top: 1px solid var(--border-soft); background: var(--bg-surface); padding: 12px 30px 14px; }
@@ -1515,6 +1519,24 @@
         <div class="seg-btn" data-val="matte" onclick="setTweak('surface','matte')">Matte</div>
         <div class="seg-btn" data-val="glass" onclick="setTweak('surface','glass')">Glass</div>
         <div class="seg-btn" data-val="beveled" onclick="setTweak('surface','beveled')">Beveled</div>
+      </div>
+      <div class="set-sub-label">Home cards</div>
+      <div class="set-seg seg-control" data-layout="home">
+        <div class="seg-btn" data-val="rows" onclick="setHomeLayout('rows')">Rows</div>
+        <div class="seg-btn" data-val="auto" onclick="setHomeLayout('auto')">Auto</div>
+        <div class="seg-btn" data-val="stacked" onclick="setHomeLayout('stacked')">Stacked</div>
+      </div>
+      <div class="settings-row" id="home-stack-bp-row" style="flex-direction:column;align-items:flex-start;gap:8px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+          <span class="settings-row-label">Stack below width</span>
+          <span id="home-stack-bp-val" style="font-size:14px;color:var(--gold);font-weight:500;min-width:56px;text-align:right;">900px</span>
+        </div>
+        <input type="range" id="home-stack-bp-slider" min="600" max="1400" step="20" value="900"
+          style="width:100%;accent-color:var(--gold);"
+          oninput="setHomeStackBp(this.value)">
+        <div style="display:flex;justify-content:space-between;width:100%;font-size:11px;color:var(--text-dim);">
+          <span>600</span><span>1000</span><span>1400</span>
+        </div>
       </div>
     </div>
 
@@ -2463,7 +2485,7 @@ async function fetchTeamSummary() {
   let record = '\u2014';
   try {
     const rec = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/13/record').then(r=>r.json());
-    record = rec.team?.record?.items?.find(i=>i.type==='total')?.summary || '\u2014';
+    record = rec.team?.record?.items?.find(i=>i.type==='total')?.summary || '0-0';
   } catch(e) {}
   let next = null, opp = null, home = false, when = '', venue = '', kickISO = null;
   try {
@@ -3219,6 +3241,36 @@ function loadGdScale() {
   } catch(e) {}
 }
 
+// ── HOME LAYOUT (rows / auto / stacked) ────────────────
+// Controls whether the home dashboard cards sit side-by-side (rows) or stacked
+// vertically. "auto" stacks them when the viewport is narrower than a threshold.
+const HOME_LAYOUT_KEY   = 'teslahome_home_layout';    // 'rows' | 'auto' | 'stacked'
+const HOME_STACK_BP_KEY = 'teslahome_home_stack_bp';  // px threshold used in auto mode
+
+function getHomeLayout()  { try { return localStorage.getItem(HOME_LAYOUT_KEY) || 'rows'; } catch(e) { return 'rows'; } }
+function getHomeStackBp() { try { return parseInt(localStorage.getItem(HOME_STACK_BP_KEY) || '900') || 900; } catch(e) { return 900; } }
+
+function applyHomeLayout() {
+  const mode = getHomeLayout();
+  const bp   = getHomeStackBp();
+  const stacked = mode === 'stacked' ? true
+                : mode === 'auto'    ? window.innerWidth < bp
+                : false;
+  document.body.classList.toggle('home-stacked', stacked);
+  // sync settings UI
+  document.querySelectorAll('.seg-control[data-layout] .seg-btn')
+    .forEach(b => b.classList.toggle('active', b.dataset.val === mode));
+  const bpVal = document.getElementById('home-stack-bp-val');
+  const bpSl  = document.getElementById('home-stack-bp-slider');
+  const bpRow = document.getElementById('home-stack-bp-row');
+  if (bpVal) bpVal.textContent = bp + 'px';
+  if (bpSl)  bpSl.value = bp;
+  if (bpRow) bpRow.style.display = (mode === 'auto') ? 'flex' : 'none';
+}
+function setHomeLayout(mode) { try { localStorage.setItem(HOME_LAYOUT_KEY, mode); } catch(e) {} applyHomeLayout(); }
+function setHomeStackBp(px)  { try { localStorage.setItem(HOME_STACK_BP_KEY, parseInt(px)); } catch(e) {} applyHomeLayout(); }
+window.addEventListener('resize', applyHomeLayout);
+
 // ── SETTINGS ───────────────────────────────────────────
 const SETTINGS_KEY = 'teslahome_settings';
 
@@ -3252,6 +3304,8 @@ function openSettings() {
   } catch(e) {}
   // geo toggle controls manual city row
   document.getElementById('manual-city-row').style.display = s.geo ? 'none' : 'flex';
+  // sync home-layout control
+  applyHomeLayout();
 }
 
 function closeSettings() {
@@ -3435,6 +3489,7 @@ function applyTweaks() {
   // sync panel UI
   document.querySelectorAll('.mood-card').forEach(c => c.classList.toggle('active', c.dataset.mood===tweaks.mood));
   document.querySelectorAll('.seg-control').forEach(g => {
+    if (!g.dataset.tweak) return; // skip non-tweak seg-controls (e.g. home layout)
     g.querySelectorAll('.seg-btn').forEach(b2 => b2.classList.toggle('active', b2.dataset.val===tweaks[g.dataset.tweak]));
   });
 }
@@ -3675,6 +3730,7 @@ checkGameDay();
 setInterval(checkGameDay, 300000);
 applySettings();
 loadGdScale();
+applyHomeLayout();
 setInterval(applySettings, 3600000);
 </script>
 </body>
