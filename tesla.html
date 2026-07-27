@@ -199,6 +199,7 @@
   .afc-streak { font-size: 12px; padding: 4px 9px; border-radius: 5px; white-space: nowrap; font-weight: 500; }
   .sw { background: #4caf8222; color: #4caf82; }
   .sl { background: #e05a5a22; color: #e05a5a; }
+  .sn { background: var(--border-soft); color: var(--text-dim); }
 
   .raiders-card {
     background: var(--bg-tile); border-radius: var(--radius);
@@ -1179,6 +1180,9 @@
   /* Home layout: force single-column stacking (manual toggle or auto breakpoint, driven by JS) */
   body.home-stacked .home-hero-row { grid-template-columns: 1fr; }
   body.home-stacked .home-grid     { grid-template-columns: 1fr; }
+
+  /* Keep standings / schedule rows readable instead of over-stretching on wide cards */
+  #home-afc-feed, #home-sched-feed { max-width: 760px; }
 
   /* ── HOME SHORTCUT RAIL (bottom, horizontal) ──────── */
   #home-shortcuts { flex-shrink: 0; border-top: 1px solid var(--border-soft); background: var(--bg-surface); padding: 12px 30px 14px; }
@@ -2416,6 +2420,13 @@ function loadRaidersSchedule(target = 'schedule-feed', titleId = 'schedule-title
             <span class="schedule-result ${rc}">${rt}</span>
           </div>`;
         }).join('');
+        // Open the list on the next upcoming game, not scrolled to the end of the season.
+        requestAnimationFrame(() => {
+          const rows = feedEl.querySelectorAll('.schedule-row');
+          let nextRow = null;
+          for (const r of rows) { if (r.querySelector('.result-tbd')) { nextRow = r; break; } }
+          feedEl.scrollTop = nextRow ? Math.max(0, nextRow.offsetTop - feedEl.offsetTop) : 0;
+        });
       } else {
         renderSched2024(target);
       }
@@ -2464,16 +2475,17 @@ function loadAfcWest(target = 'afc-west-feed') {
         const l    = t.stats?.find(s=>s.name==='losses')?.value||0;
         const abbr = t.team?.abbreviation||'';
         const isLV = t.team?.id==='13';
-        const gb   = i===0 ? '—' : (((lw-w)+(l-ll))/2).toFixed(1).replace('.0','');
+        const gamesPlayed = lw + ll;
+        const gb   = (i===0 || gamesPlayed===0) ? '—' : (((lw-w)+(l-ll))/2).toFixed(1).replace('.0','');
         const streak = t.stats?.find(s=>s.name==='streak')?.displayValue||'';
-        const sw   = streak.startsWith('W') ? 'w' : 'l';
+        const streakCls = !streak ? 'sn' : (streak.startsWith('W') ? 'sw' : 'sl');
         return `<div class="afc-row">
           <span class="afc-rank">${i+1}</span>
           <img class="afc-logo" src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/${abbr.toLowerCase()}.png" alt="${abbr}">
           <span class="afc-abbr${isLV?' lv':''}">${abbr}</span>
           <span class="afc-rec">${w}-${l}</span>
           <span class="afc-gb">${gb}</span>
-          <span class="afc-streak ${sw==='w'?'sw':'sl'}">${streak||'—'}</span>
+          <span class="afc-streak ${streakCls}">${streak||'—'}</span>
         </div>`;
       }).join('');
     }).catch(()=>renderAfcWestFallback(target));
