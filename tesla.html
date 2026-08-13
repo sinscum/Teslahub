@@ -2701,7 +2701,21 @@ async function loadTeamHero() {
 
 // ── GAME DAY ───────────────────────────────────────────
 const RAIDERS_ID = '13';
-const WATCH_URL  = 'https://thetvapp.link/';
+// Where the "Watch Live" chip points. Leave WATCH_OVERRIDE blank to auto-pick the
+// broadcaster's official live stream from the game's TV network; set it to force one URL.
+const WATCH_OVERRIDE = '';
+function watchUrl(network) {
+  if (WATCH_OVERRIDE) return WATCH_OVERRIDE;
+  const n = (network || '').toUpperCase();
+  if (n.includes('PARAMOUNT') || n.includes('CBS'))    return 'https://www.paramountplus.com/live-tv/';
+  if (n.includes('PEACOCK')   || n.includes('NBC'))    return 'https://www.peacocktv.com/sports/nfl';
+  if (n.includes('ABC')       || n.includes('ESPN'))   return 'https://www.espn.com/watch/';
+  if (n.includes('FOX'))                                return 'https://www.foxsports.com/live';
+  if (n.includes('PRIME')     || n.includes('AMAZON')) return 'https://www.amazon.com/gp/video/storefront/';
+  if (n.includes('NETFLIX'))                            return 'https://www.netflix.com/';
+  if (n.includes('NFL'))                                return 'https://www.nfl.com/network/watch/nfl-network-live';
+  return 'https://www.nfl.com/plus/';
+}
 let gdState      = null; // 'pregame' | 'live' | 'final' | null
 let gdGame       = null;
 let gdPollTimer  = null;
@@ -2889,7 +2903,7 @@ function buildPreGame(comp, lv, opp, game) {
         <div class="gd-cd-unit"><div class="gd-cd-num" id="cd-s">--</div><div class="gd-cd-lbl">Sec</div></div>
       </div>
       <div class="gd-chips">
-        <a class="gd-chip primary" href="${WATCH_URL}" target="_blank">${network} · Watch Live</a>
+        <a class="gd-chip primary" href="${watchUrl(network)}" target="_blank">${network} · Watch Live</a>
         <div class="gd-chip radio-chip" onclick="playerToggle()">${isPlaying ? '● Radio 920AM · Live' : 'Radio 920AM'}</div>
       </div>
     </div>
