@@ -2174,6 +2174,9 @@ function currentNflSeason() {
 }
 
 function setTicker(label, value, extra) {
+  // A live game owns the ticker (it shows the running score). loadTicker checks this
+  // too, but its fetch can resolve after the game goes live — guard here as well.
+  if (gdState === 'live') return;
   document.getElementById('ticker-label').textContent = label;
   document.getElementById('ticker-value').textContent = value;
   document.getElementById('ticker-extra').textContent = extra;
