@@ -2720,10 +2720,40 @@ let gdState      = null; // 'pregame' | 'live' | 'final' | null
 let gdGame       = null;
 let gdPollTimer  = null;
 
-async function checkGameDay() {
+// Scoreboard competitors carry a top-level `id`; team-schedule competitors only carry
+// `team.id`. Normalize so downstream lookups on `c.id` work with either source.
+function normalizeGame(game) {
+  const comps = game?.competitions?.[0]?.competitors;
+  if (comps) comps.forEach(c => { if (c.id == null && c.team?.id != null) c.id = String(c.team.id); });
+  return game;
+}
+
+const isRaiders = c => c.id === RAIDERS_ID || c.team?.id === RAIDERS_ID;
+
+async function findRaidersGame() {
+  // Primary: live scoreboard — carries live status and scores, but only for the current week.
   try {
     const sb   = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard').then(r=>r.json());
-    const game = sb.events?.find(e => e.competitions?.[0]?.competitors?.some(c=>c.id===RAIDERS_ID));
+    const game = sb.events?.find(e => e.competitions?.[0]?.competitors?.some(isRaiders));
+    if (game) return normalizeGame(game);
+  } catch(e) {}
+  // Fallback: team schedule (preseason + regular), so the tab still appears in the 24h
+  // window for weeks the scoreboard hasn't rolled over to yet.
+  try {
+    const events = await fetchRaidersEvents(currentNflSeason());
+    const now    = Date.now();
+    const next   = events
+      .map(e => ({ e, t: new Date(e.date).getTime() }))
+      .filter(x => !isNaN(x.t) && x.t > now - 6 * 3600000)  // keep a game in progress / just ended
+      .sort((a, b) => a.t - b.t)[0];
+    if (next) return normalizeGame(next.e);
+  } catch(e) {}
+  return null;
+}
+
+async function checkGameDay() {
+  try {
+    const game = await findRaidersGame();
     if (!game) { hideGameDayTab(); return; }
     gdGame = game;
     const comp   = game.competitions[0];
@@ -2744,7 +2774,7 @@ async function checkGameDay() {
         startGdPoll();
       } else if (diffHrs > 0 && diffHrs <= 24) {
         showGameDayTab('PRE');
-        renderPreGame(comp, game);
+        renderPreGamePreview(comp, game);
       } else {
         hideGameDayTab();
       }
@@ -2753,9 +2783,12 @@ async function checkGameDay() {
 }
 
 function setGameDayState(state) {
+  const prev = gdState;
   gdState = state;
   showGameDayTab(state === 'live' ? 'LIVE' : state === 'final' ? 'FINAL' : 'TODAY');
-  if (state === 'live' || state === 'pregame') {
+  // Only jump to the tab when the user has auto-switch enabled, and only on entering
+  // the state — so a manual switch away isn't yanked back on the next poll.
+  if ((state === 'live' || state === 'pregame') && state !== prev && getSettings().autoswitch) {
     switchTab('gameday');
   }
   renderGameDay();
@@ -2774,15 +2807,15 @@ function hideGameDayTab() {
   document.getElementById('gameday-tab').style.display = 'none';
   if (gdState) switchTab('home');
   gdState = null;
+  if (gdPollTimer) { clearInterval(gdPollTimer); gdPollTimer = null; }
 }
 
 function startGdPoll() {
   if (gdPollTimer) return;
   gdPollTimer = setInterval(async () => {
     try {
-      const sb   = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard').then(r=>r.json());
-      const game = sb.events?.find(e => e.competitions?.[0]?.competitors?.some(c=>c.id===RAIDERS_ID));
-      if (!game) { clearInterval(gdPollTimer); hideGameDayTab(); return; }
+      const game = await findRaidersGame();
+      if (!game) { clearInterval(gdPollTimer); gdPollTimer = null; hideGameDayTab(); return; }
       gdGame = game;
       const status = game.competitions[0].status?.type;
       if (status?.completed && gdState !== 'final') setGameDayState('final');
@@ -2792,11 +2825,27 @@ function startGdPoll() {
   }, 30000); // poll every 30s
 }
 
+let gdExpiryTimer = null;
 function scheduleGdExpiry(comp) {
-  // hide final state after 24hrs from game end
+  // hide final state after 24hrs from game end (checkGameDay re-runs every 5 min while
+  // the game is final, so replace any pending timer instead of stacking them up)
   const endTime = new Date(comp.status?.type?.lastUpdated || Date.now());
   const msLeft  = Math.max(0, (endTime.getTime() + 86400000) - Date.now());
-  setTimeout(() => { hideGameDayTab(); clearInterval(gdPollTimer); }, msLeft);
+  if (gdExpiryTimer) clearTimeout(gdExpiryTimer);
+  gdExpiryTimer = setTimeout(() => { gdExpiryTimer = null; hideGameDayTab(); }, msLeft);
+}
+
+// 24h-out preview: fill the Game Day tab so it's ready when tapped, without taking
+// over the screen (gdState stays null until we're inside the 3h pregame window).
+function renderPreGamePreview(comp, game) {
+  const el = document.getElementById('gd-content');
+  if (!el) return;
+  const lv  = comp.competitors.find(c => c.id === RAIDERS_ID);
+  const opp = comp.competitors.find(c => c.id !== RAIDERS_ID);
+  el.innerHTML = buildPreGame(comp, lv, opp, game);
+  startCountdown(game.date);
+  loadPreGameContext(opp?.id);
+  loadPreGameNews();
 }
 
 function renderGameDay() {
@@ -2809,7 +2858,7 @@ function renderGameDay() {
   if (gdState === 'pregame') {
     el.innerHTML = buildPreGame(comp, lv, opp, gdGame);
     startCountdown(gdGame.date);
-    loadPreGameContext(opp?.id);        // ← was never called (pre-existing bug)
+    loadPreGameContext(opp?.id);
     loadPreGameNews();
   } else if (gdState === 'live') {
     // remember scores so we can flash on change
